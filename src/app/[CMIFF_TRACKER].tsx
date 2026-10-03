@@ -244,6 +244,30 @@ export default function CMIFFTracker() {
       }
     };
     loadSeedData();
+
+    // Poll crew links every 10 seconds to pick up Telegram /connect updates
+    const pollCrew = async () => {
+      try {
+        const res = await fetch("/api/crew");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.crew?.length > 0) {
+            setCrew((prev) => {
+              const updated = prev.map((p) => {
+                const linked = data.crew.find((c: any) => c.token === p.token);
+                return linked ? { ...p, linked: linked.linked, telegramChatId: linked.telegramChatId } : p;
+              });
+              return updated;
+            });
+          }
+        }
+      } catch (e) {
+        // Silently ignore poll errors
+      }
+    };
+    pollCrew();
+    const interval = setInterval(pollCrew, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // ─── Simulation clock ─────────────────────────────────────────────

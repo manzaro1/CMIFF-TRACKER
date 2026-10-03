@@ -32,3 +32,6 @@ next-env.d.ts
 
 # convex
 .convex
+
+# Crew link storage (generated at runtime)
+.data/
