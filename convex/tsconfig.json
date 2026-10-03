@@ -1,0 +1,6 @@
+import { defineConfig } from "convex/server";
+import { httpRouter } from "convex/server";
+
+const router = httpRouter();
+
+export default defineConfig(router);
