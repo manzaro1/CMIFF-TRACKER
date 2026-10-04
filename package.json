@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "convex": "convex"
+    "lint": "next lint"
   },
   "dependencies": {
     "convex": "^1.24.0",

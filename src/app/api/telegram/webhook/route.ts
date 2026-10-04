@@ -26,7 +26,7 @@ function writeCrewLinks(data: Array<{ token: string; telegramChatId: string; lin
 }
 
 async function sendTelegramMessage(token: string, chatId: string, text: string) {
-  if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN not set");
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN not set");
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       } else {
         try {
           await sendTelegramMessage(BOT_TOKEN, chatId,
-            `❌ *Invalid access code.*\n\nPlease check the code in the app (ADMIN → Telegram Accounts) and try again.`
+            `❌ *Invalid access code.*\n\nPlease check the code in the app and try again.`
           );
         } catch (e) {
           console.error("[webhook] send message error:", e);

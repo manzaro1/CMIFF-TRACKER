@@ -1,2 +1,1 @@
-import CMIFFTracker from "./[CMIFF_TRACKER]";
-export default CMIFFTracker;
+export { default } from "./[CMIFF_TRACKER]";

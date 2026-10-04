@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────
+// @ts-ignore
 interface Activity {
   _id: string;
   day: number;
@@ -723,10 +724,10 @@ ${adminText}`,
                         </div> : null}
                       </div>
                       <div className="pc-venue">
-                        <span className="vchip" style={{ "--vc": VEN[a.venue]?.c }}>{VEN[a.venue]?.s}</span>
+                        <span className="vchip" style={{ "--vc": VEN[a.venue]?.c as any }}>{VEN[a.venue]?.s}</span>
                       </div>
                       <div className="pc-pill">
-                        <span className="vchip" style={{ "--vc": PIL[a.pillar]?.[1] }}>{PIL[a.pillar]?.[0]}</span>
+                        <span className="vchip" style={{ "--vc": PIL[a.pillar]?.[1] as any }}>{PIL[a.pillar]?.[0]}</span>
                       </div>
                       <div className="pc-stat">
                         <span className={`pill st-${a.status}`}>{STS[a.status]?.[0]}</span>
@@ -793,8 +794,8 @@ ${adminText}`,
                         <div>
                           <div className="slot-title">{esc(a.title)}</div>
                           <div className="slot-meta">
-                            <span className="vchip" style={{ "--vc": VEN[a.venue]?.c }}>{VEN[a.venue]?.s}</span>
-                            <span className="vchip" style={{ "--vc": PIL[a.pillar]?.[1] }}>{PIL[a.pillar]?.[0]}</span>
+                            <span className="vchip" style={{ "--vc": VEN[a.venue]?.c as any }}>{VEN[a.venue]?.s}</span>
+                            <span className="vchip" style={{ "--vc": PIL[a.pillar]?.[1] as any }}>{PIL[a.pillar]?.[0]}</span>
                             <span className={`pill st-${a.status}`}>{STS[a.status]?.[0]}</span>
                             {a.gear ? <span className="gear"><Zap size={9} />{esc(a.gear)}</span> : null}
                             {a.checks && Object.values(a.checks).includes(false)
@@ -842,7 +843,7 @@ ${adminText}`,
                   {dayActivities.filter((a) => statusOf(a, simMin, shifts()) === "live").slice(0, 3).map((a) => (
                     <div key={a._id} className="now-item">
                       <div className="ni-top">
-                        <span className="vchip" style={{ "--vc": VEN[a.venue]?.c }}>{VEN[a.venue]?.s}</span>
+                        <span className="vchip" style={{ "--vc": VEN[a.venue]?.c as any }}>{VEN[a.venue]?.s}</span>
                         <span className="ni-clock">{fmt(eff(a, shifts()))} → {fmt(eff(a, shifts()) + a.end - a.start)}</span>
                       </div>
                       <div className="ni-title">{esc(a.title)}</div>
@@ -1167,7 +1168,7 @@ ${adminText}`,
                         <span style={{ font: "600 10px var(--mono); color: var(--sand)" }}>{a.start}–{a.end}</span>
                         <span style={{ minWidth: 0 }}>{esc(a.title)}</span>
                         <span className={`pill st-${a.status}`}>{a.status}</span>
-                        <span className="vchip" style={{ "--vc": VEN[a.venue]?.c || "var(--sand)" }}>{VEN[a.venue]?.s || a.venue}</span>
+                        <span className="vchip" style={{ "--vc": VEN[a.venue]?.c || "var(--sand)" as any }}>{VEN[a.venue]?.s || a.venue}</span>
                       </div>
                     ))}
                   </div>
@@ -1227,8 +1228,8 @@ ${adminText}`,
             </div>
             <div className="d-list">
               <div className="kv"><b>TIME</b><div><span style={{ font: "600 12px var(--mono), monospace" }}>{fmt(selectedAct.start)} – {fmt(selectedAct.end)}</span></div></div>
-              <div className="kv"><b>VENUE</b><div><span className="vchip" style={{ "--vc": VEN[selectedAct.venue]?.c }}>{VEN[selectedAct.venue]?.s}</span></div></div>
-              <div className="kv"><b>PILLAR</b><div><span className="vchip" style={{ "--vc": PIL[selectedAct.pillar]?.[1] }}>{PIL[selectedAct.pillar]?.[0]}</span></div></div>
+              <div className="kv"><b>VENUE</b><div><span className="vchip" style={{ "--vc": VEN[selectedAct.venue]?.c as any }}>{VEN[selectedAct.venue]?.s}</span></div></div>
+              <div className="kv"><b>PILLAR</b><div><span className="vchip" style={{ "--vc": PIL[selectedAct.pillar]?.[1] as any }}>{PIL[selectedAct.pillar]?.[0]}</span></div></div>
               <div className="kv"><b>STATUS</b><div><span className={`pill st-${selectedAct.status}`}>{STS[selectedAct.status]?.[0]}</span></div></div>
               {selectedAct.details && <div className="kv"><b>DETAILS</b><div style={{ display: "block" }}>{esc(selectedAct.details)}</div></div>}
               {selectedAct.gear && <div className="kv"><b>GEAR</b><div>{selectedAct.gear.split("·").map((g, i) => <span key={i} className="gear"><Zap size={9} />{esc(g.trim())}</span>)}</div></div>}
@@ -1330,7 +1331,7 @@ ${adminText}`,
               {incidents.map((i) => {
                 const a = activities.find((x) => x._id === i.actId);
                 return (
-                  <div key={i._id} className="send-item" style={{ "--pc": i.sev === "CRITICAL" ? "var(--red)" : i.sev === "HIGH" ? "var(--amber)" : "var(--sand)", opacity: i.status === "resolved" ? 0.55 : 1, marginBottom: 8 }}>
+                  <div key={i._id} className="send-item" style={{ "--pc": i.sev === "CRITICAL" ? "var(--red)" : i.sev === "HIGH" ? "var(--amber)" : "var(--sand)", opacity: i.status === "resolved" ? 0.55 : 1, marginBottom: 8 } as any}>
                     <div className="sh">
                       <span>D{i.day} {i.tm}</span>
                       <span>{i.sev}</span>

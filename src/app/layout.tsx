@@ -3,6 +3,13 @@ import { Archivo } from "next/font/google";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+// Type extension for CSS custom properties in React
+declare global {
+  interface CSSProperties {
+    [key: `--${string}`]: string | number;
+  }
+}
+
 const archivo = Archivo({
   subsets: ["latin"],
   display: "swap",

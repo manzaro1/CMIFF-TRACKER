@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 
 // ─── Parse uploaded text into structured activities ─────────────────────
 export const parseActivityFile = mutation({
@@ -135,7 +135,7 @@ async function fallbackParse(
       let pillar = defaultPillar || "general";
       const lower = trimmed.toLowerCase();
       for (const v of VEN) {
-        if (lower.includes(v) || lower.includes( VEN[v as keyof typeof { arena: string; hub: string; tent: string; theatre: string; main: string; dj: string; bonfire: string }] || "")) {
+        if (lower.includes(v)) {
           venue = v;
           break;
         }
