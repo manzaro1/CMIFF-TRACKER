@@ -1,26 +1,12 @@
 import type { Metadata } from "next";
-import { Archivo } from "next/font/google";
-import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
-// Type extension for CSS custom properties in React
-declare global {
+declare module "react" {
   interface CSSProperties {
     [key: `--${string}`]: string | number;
   }
 }
-
-const archivo = Archivo({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-ui",
-});
-
-const jetbrains = JetBrains_Mono({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-mono",
-});
 
 export const metadata: Metadata = {
   title: "CMIFF 2026 · Activity Tracker",
@@ -33,11 +19,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${archivo.variable} ${jetbrains.variable}`}>
+    <html lang="en">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </head>
-      <body style={{ margin: 0, padding: 0 }}>{children}</body>
+      <body style={{ margin: 0, padding: 0 }}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { action } from "./_generated/server";
+import { requireStaff } from "./lib/auth";
 
 // ─── Parse uploaded text into structured activities ─────────────────────
-export const parseActivityFile = mutation({
+export const parseActivityFile = action({
   args: {
     day: v.number(),
     text: v.string(),
@@ -10,6 +11,7 @@ export const parseActivityFile = mutation({
     pillar: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireStaff(ctx);
     const apiKey = process.env.API_KEY;
     const baseUrl = process.env.BASE_URL || "https://api.openai.com/v1";
     const model = process.env.MODEL || "gpt-4o-mini";
@@ -160,9 +162,10 @@ async function fallbackParse(
 }
 
 // ─── AI draft for broadcast messages ───────────────────────────────────
-export const aiDraftBroadcast = mutation({
+export const aiDraftBroadcast = action({
   args: { prompt: v.string() },
   handler: async (ctx, args) => {
+    await requireStaff(ctx);
     const apiKey = process.env.API_KEY;
     const baseUrl = process.env.BASE_URL || "https://api.openai.com/v1";
     const model = process.env.MODEL || "gpt-4o-mini";

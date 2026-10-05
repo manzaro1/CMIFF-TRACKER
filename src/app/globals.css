@@ -1,6 +1,6 @@
 :root {
-  --font-ui: var(--font-ui, "Archivo", sans-serif);
-  --font-mono: var(--font-mono, "JetBrains Mono", monospace);
+  --font-ui: "Arial", "Helvetica Neue", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -31,4 +31,94 @@ input, select, textarea {
   input, select, textarea {
     font-size: 14px;
   }
+}
+
+.auth-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(79, 179, 154, 0.1), transparent 52%),
+    #0F0D0A;
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  padding: 32px;
+  border: 1px solid #3A3328;
+  border-radius: 14px;
+  background: #17140F;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.auth-kicker {
+  margin-bottom: 18px;
+  color: #4FB39A;
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.12em;
+}
+
+.auth-card h1 {
+  margin: 0 0 10px;
+  color: #F0E8D8;
+  font-size: 26px;
+}
+
+.auth-copy {
+  color: #A99D89;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: #D6CBB8;
+  font-size: 13px;
+}
+
+.auth-form input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #443B2E;
+  border-radius: 7px;
+  background: #0F0D0A;
+  color: #F0E8D8;
+}
+
+.auth-submit {
+  min-height: 44px;
+  border: 0;
+  border-radius: 7px;
+  background: #4FB39A;
+  color: #0F0D0A;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.auth-switch {
+  margin-top: 18px;
+  border: 0;
+  background: transparent;
+  color: #C9B98F;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.auth-error {
+  color: #F0846B;
+  font-size: 13px;
+  line-height: 1.5;
 }
