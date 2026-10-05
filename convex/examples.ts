@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireStaff } from "./lib/auth";
 
 // Seed data from the prototype + real PDF/Excel data
 const VEN = {
@@ -32,6 +33,13 @@ const STS: Record<string, [string, string]> = {
 export const seedAll = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireStaff(ctx);
+    const crewExists = await ctx.db.query("crew_members").first();
+    const activitiesExist = await ctx.db.query("activities").first();
+    if (crewExists && activitiesExist) {
+      return { crew: 0, activities: 0, alreadySeeded: true };
+    }
+
     // Crew
     const crew = [
       { name: "Grace Banda", role: "LEAD", venue: "arena", telegramHandle: "@grace_banda", linked: false, token: "cmiff-grace" },
@@ -67,9 +75,14 @@ export const seedAll = mutation({
       { name: "Madalo Chirwa", role: "VOL", venue: "bonfire", telegramHandle: "@madalo", linked: false, token: "cmiff-madalo" },
     ];
 
-    for (const c of crew) {
-      const id = await ctx.db.generateId();
-      await ctx.db.insert("crew_members", { ...c, linked: false, telegramChatId: undefined });
+    if (!crewExists) {
+      for (const c of crew) {
+        await ctx.db.insert("crew_members", {
+          ...c,
+          linked: false,
+          telegramChatId: undefined,
+        });
+      }
     }
 
     // Activities
@@ -116,17 +129,23 @@ export const seedAll = mutation({
       { day: 3, start: 1140, end: 1200, title: "Certificates & Closing Ceremony", venue: "hub", pillar: "learn", status: "CONF", details: "Certificate of Completion awards, participant feedback, group photo", gear: "", quiet: false },
     ];
 
-    for (const a of activities) {
-      const id = await ctx.db.generateId();
-      await ctx.db.insert("activities", { ...a, _id: id });
+    if (!activitiesExist) {
+      for (const a of activities) {
+        await ctx.db.insert("activities", a);
+      }
     }
 
-    return { crew: crew.length, activities: activities.length };
+    return {
+      crew: crewExists ? 0 : crew.length,
+      activities: activitiesExist ? 0 : activities.length,
+    };
   },
 });
 
 export const getCrew = query({
+  args: {},
   handler: async (ctx) => {
+    await requireStaff(ctx);
     return await ctx.db.query("crew_members").collect();
   },
 });
@@ -134,15 +153,20 @@ export const getCrew = query({
 export const getActivities = query({
   args: { day: v.number() },
   handler: async (ctx, args) => {
-    return await ctx.db.query("activities")
-      .filter((q) => q.eq(q.field("day"), args.day))
+    await requireStaff(ctx);
+    return await ctx.db
+      .query("activities")
+      .withIndex("by_day", (q) => q.eq("day", args.day))
       .collect();
   },
 });
 
 export const getAllActivities = query({
+  args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("activities").order((a) => a.asc(a.field("day"))).order((a) => a.asc(a.field("start"))).collect();
+    await requireStaff(ctx);
+    const activities = await ctx.db.query("activities").collect();
+    return activities.sort((a, b) => a.day - b.day || a.start - b.start);
   },
 });
 
@@ -155,19 +179,20 @@ export const addWireMessage = mutation({
     text: v.string(),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.generateId();
-    await ctx.db.insert("wire_messages", { id, ...args });
+    await requireStaff(ctx);
+    await ctx.db.insert("wire_messages", { id: String(Date.now()), ...args });
   },
 });
 
 export const getWireMessages = query({
   args: { day: v.number(), filter: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    let q = ctx.db.query("wire_messages").filter((q) => q.eq(q.field("day"), args.day));
+    await requireStaff(ctx);
+    let q = ctx.db.query("wire_messages").withIndex("by_day", (q) => q.eq("day", args.day));
     if (args.filter) {
       q = q.filter((q) => q.eq(q.field("kind"), args.filter));
     }
-    return await q.collect();
+    return (await q.collect()).sort((a, b) => b.time.localeCompare(a.time));
   },
 });
 
@@ -181,37 +206,36 @@ export const addIncident = mutation({
     tm: v.string(),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.generateId();
-    await ctx.db.insert("incidents", {
-      id,
-      ...args,
-      status: "open",
-    });
+    await requireStaff(ctx);
+    return await ctx.db.insert("incidents", { ...args, status: "open" });
   },
 });
 
 export const resolveIncident = mutation({
-  args: { id: v.string() },
+  args: { id: v.id("incidents") },
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (doc) {
-      await ctx.db.patch(args.id, { status: "resolved" });
-    }
+    await requireStaff(ctx);
+    await ctx.db.patch(args.id, { status: "resolved" });
   },
 });
 
 export const getIncidents = query({
-  args: { day: v.number() },
+  args: { day: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    return await ctx.db.query("incidents")
-      .filter((q) => q.eq(q.field("day"), args.day))
+    await requireStaff(ctx);
+    if (args.day === undefined) return await ctx.db.query("incidents").collect();
+    return await ctx.db
+      .query("incidents")
+      .withIndex("by_day", (q) => q.eq("day", args.day!))
       .collect();
   },
 });
 
 export const getBotMessages = query({
+  args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("bot_messages").order((a) => a.desc(a.field("seq"))).take(50);
+    await requireStaff(ctx);
+    return await ctx.db.query("bot_messages").withIndex("by_seq").order("desc").take(50);
   },
 });
 
@@ -227,13 +251,15 @@ export const addBotMessage = mutation({
     acked: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireStaff(ctx);
     await ctx.db.insert("bot_messages", args);
   },
 });
 
 export const ackBotMessage = mutation({
-  args: { id: v.string() },
+  args: { id: v.id("bot_messages") },
   handler: async (ctx, args) => {
+    await requireStaff(ctx);
     await ctx.db.patch(args.id, { acked: true });
   },
 });
@@ -249,6 +275,7 @@ export const addBroadcastLog = mutation({
     txt: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireStaff(ctx);
     await ctx.db.insert("broadcast_logs", args);
   },
 });
@@ -256,9 +283,55 @@ export const addBroadcastLog = mutation({
 export const getBroadcastLogs = query({
   args: { day: v.number() },
   handler: async (ctx, args) => {
-    return await ctx.db.query("broadcast_logs")
-      .filter((q) => q.eq(q.field("day"), args.day))
-      .order((a) => a.desc(a.field("tm")))
-      .collect();
+    await requireStaff(ctx);
+    return (await ctx.db
+      .query("broadcast_logs")
+      .withIndex("by_day", (q) => q.eq("day", args.day))
+      .collect()).sort((a, b) => b.tm.localeCompare(a.tm));
+  },
+});
+
+export const addActivities = mutation({
+  args: {
+    activities: v.array(
+      v.object({
+        day: v.number(),
+        start: v.number(),
+        end: v.number(),
+        title: v.string(),
+        venue: v.string(),
+        pillar: v.string(),
+        status: v.string(),
+        details: v.optional(v.string()),
+        gear: v.optional(v.string()),
+        quiet: v.boolean(),
+        delay: v.optional(v.number()),
+        manual: v.optional(v.union(v.string(), v.null())),
+        crewLead: v.optional(v.union(v.string(), v.null())),
+        crewTechs: v.optional(v.array(v.string())),
+        crewVols: v.optional(v.array(v.string())),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const ids = [];
+    for (const activity of args.activities) {
+      ids.push(await ctx.db.insert("activities", activity));
+    }
+    return ids;
+  },
+});
+
+export const updateActivity = mutation({
+  args: {
+    id: v.id("activities"),
+    delay: v.optional(v.number()),
+    manual: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const { id, ...patch } = args;
+    await ctx.db.patch(id, patch);
   },
 });

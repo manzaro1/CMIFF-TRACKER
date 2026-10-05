@@ -1,19 +1,23 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   CalendarDays, LayoutDashboard, Users, Send, Shield,
   Flag, X, Check, CheckCheck, Play, Square, AlertTriangle,
   RotateCw, Film, Radio, HardDrive, Clock, Printer,
   Sparkles, SlidersHorizontal, Megaphone, UserCheck,
   Zap, Volume2, FileWarning, UsersRound, Sailboat,
-  Sunrise, ClipboardList, Crosshair, Timer,
+  Sunrise, ClipboardList, Crosshair, Timer, LogOut,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────
 // @ts-ignore
 interface Activity {
-  _id: string;
+  _id: Id<"activities">;
   day: number;
   start: number;
   end: number;
@@ -33,7 +37,7 @@ interface Activity {
 }
 
 interface CrewMember {
-  _id: string;
+  _id: Id<"crew_members">;
   name: string;
   role: "LEAD" | "TECH" | "VOL";
   venue: string;
@@ -44,7 +48,7 @@ interface CrewMember {
 }
 
 interface WireMessage {
-  _id: string;
+  _id: Id<"wire_messages">;
   id: string;
   time: string;
   day: number;
@@ -58,8 +62,7 @@ interface WireMessage {
 }
 
 interface Incident {
-  _id: string;
-  id: number;
+  _id: Id<"incidents">;
   cat: string;
   sev: string;
   note: string;
@@ -70,7 +73,7 @@ interface Incident {
 }
 
 interface BotMessage {
-  _id: string;
+  _id: Id<"bot_messages">;
   id: string;
   seq: number;
   day: number;
@@ -84,7 +87,7 @@ interface BotMessage {
 }
 
 interface BroadcastLog {
-  _id: string;
+  _id: Id<"broadcast_logs">;
   id: string;
   tm: string;
   day: number;
@@ -163,6 +166,7 @@ const short = (n: string) => n.split(" ").map((w, i) => (i ? w[0] + "." : w)).jo
 
 // ─── Main Component ─────────────────────────────────────────────────
 export default function CMIFFTracker() {
+  const { signOut } = useAuthActions();
   // State
   const [day, setDay] = useState(3);
   const [simMin, setSimMin] = useState(9 * 60 + 5);
@@ -179,13 +183,32 @@ export default function CMIFFTracker() {
   const [pQ, setPQ] = useState("");
   const [wireFilter, setWireFilter] = useState("all");
 
-  // Data
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [crew, setCrew] = useState<CrewMember[]>([]);
-  const [wire, setWire] = useState<WireMessage[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [botMessages, setBotMessages] = useState<BotMessage[]>([]);
-  const [broadcasts, setBroadcasts] = useState<BroadcastLog[]>([]);
+  // Persistent Convex data. Every data function is staff-authorized server-side.
+  const activitiesResult = useQuery(api.examples.getAllActivities, {});
+  const crewResult = useQuery(api.examples.getCrew, {});
+  const wireResult = useQuery(api.examples.getWireMessages, {
+    day,
+    filter: wireFilter === "all" ? undefined : wireFilter,
+  });
+  const incidentsResult = useQuery(api.examples.getIncidents, { day });
+  const botMessagesResult = useQuery(api.examples.getBotMessages, {});
+  const broadcastsResult = useQuery(api.examples.getBroadcastLogs, { day });
+  const activities = (activitiesResult ?? []) as Activity[];
+  const crew = (crewResult ?? []) as CrewMember[];
+  const wire = (wireResult ?? []) as WireMessage[];
+  const incidents = (incidentsResult ?? []) as Incident[];
+  const botMessages = (botMessagesResult ?? []) as BotMessage[];
+  const broadcasts = (broadcastsResult ?? []) as BroadcastLog[];
+
+  const seedAll = useMutation(api.examples.seedAll);
+  const updateActivity = useMutation(api.examples.updateActivity);
+  const addActivities = useMutation(api.examples.addActivities);
+  const addIncident = useMutation(api.examples.addIncident);
+  const resolveIncidentMutation = useMutation(api.examples.resolveIncident);
+  const addBroadcastLog = useMutation(api.examples.addBroadcastLog);
+  const ackBotMessageMutation = useMutation(api.examples.ackBotMessage);
+  const sendTelegramMessage = useAction(api.telegram.sendMessage);
+  const getTelegramBotStatus = useAction(api.telegram.getBotStatus);
   
   // Bot connection test
   const [botStatus, setBotStatus] = useState<{ connected: boolean; info?: any; error?: string } | null>(null);
@@ -227,49 +250,25 @@ export default function CMIFFTracker() {
   const lastNextKey = useRef("");
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const firedRef = useRef<Set<string>>(new Set());
-  const incSeqRef = useRef(0);
   const uidRef = useRef(0);
+  const seedRequested = useRef(false);
 
-  // ─── Fetch data from Convex ───────────────────────────────────────
+  // Seed prototype data once when the connected database is empty.
   useEffect(() => {
-    const loadSeedData = async () => {
-      try {
-        const res = await fetch("/api/seed");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.crew?.length) setCrew(data.crew);
-          if (data.activities?.length) setActivities(data.activities);
-        }
-      } catch (e) {
-        console.error("Failed to load seed data:", e);
-      }
-    };
-    loadSeedData();
-
-    // Poll crew links every 10 seconds to pick up Telegram /connect updates
-    const pollCrew = async () => {
-      try {
-        const res = await fetch("/api/crew");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.crew?.length > 0) {
-            setCrew((prev) => {
-              const updated = prev.map((p) => {
-                const linked = data.crew.find((c: any) => c.token === p.token);
-                return linked ? { ...p, linked: linked.linked, telegramChatId: linked.telegramChatId } : p;
-              });
-              return updated;
-            });
-          }
-        }
-      } catch (e) {
-        // Silently ignore poll errors
-      }
-    };
-    pollCrew();
-    const interval = setInterval(pollCrew, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    if (
+      seedRequested.current ||
+      activitiesResult === undefined ||
+      crewResult === undefined ||
+      (activitiesResult.length > 0 && crewResult.length > 0)
+    ) {
+      return;
+    }
+    seedRequested.current = true;
+    void seedAll({}).catch((error) => {
+      console.error("Failed to seed Convex data:", error);
+      seedRequested.current = false;
+    });
+  }, [activitiesResult, crewResult, seedAll]);
 
   // ─── Simulation clock ─────────────────────────────────────────────
   useEffect(() => {
@@ -322,24 +321,22 @@ export default function CMIFFTracker() {
 
   // ─── Actions ──────────────────────────────────────────────────────
   const handleStart = (a: Activity) => {
-    const sh = shifts();
-    a.manual = "live";
-    // In real app: await updateActivity(a._id, "manual", "live");
+    void updateActivity({ id: a._id, manual: "live" });
     toast("var(--red)", "play", "ON NOW", `${VEN[a.venue]?.s} · "${a.title}"`);
   };
 
   const handleWrap = (a: Activity) => {
-    a.manual = "done";
+    void updateActivity({ id: a._id, manual: "done" });
     toast("var(--teal)", "square", "WRAPPED", `${VEN[a.venue]?.s} · "${a.title}"`);
   };
 
   const handleLate = (a: Activity, mins: number) => {
-    a.delay = (a.delay || 0) + mins;
+    void updateActivity({ id: a._id, delay: (a.delay || 0) + mins });
     toast("var(--amber)", "alert-triangle", `DELAY +${mins}′`, `"${a.title}" shifted`);
   };
 
   const handleReset = (a: Activity) => {
-    a.delay = 0;
+    void updateActivity({ id: a._id, delay: 0 });
     toast("var(--teal)", "rotate-ccw", "DELAY CLEARED", `${VEN[a.venue]?.s} · back on schedule`);
   };
 
@@ -350,25 +347,21 @@ export default function CMIFFTracker() {
 
   const submitFlag = () => {
     if (!flagNote.trim()) return;
-    const newInc: Incident = {
-      _id: `inc_${++incSeqRef.current}`,
-      id: incSeqRef.current,
+    void addIncident({
       cat: "OTHER",
       sev: flagSev,
       note: flagNote,
       actId: flagActId || undefined,
       day,
       tm: fmt(simMin),
-      status: "open",
-    };
-    setIncidents((prev) => [newInc, ...prev]);
+    });
     setFlagNote("");
     setShowFlagModal(false);
     toast(flagSev === "CRITICAL" ? "var(--red)" : "var(--amber)", "flag", `${flagSev} FLAG RAISED`, flagActId ? `"${activities.find((a) => a._id === flagActId)?.title}"` : "General");
   };
 
-  const resolveFlag = (id: number) => {
-    setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, status: "resolved" } : i)));
+  const resolveFlag = (id: Id<"incidents">) => {
+    void resolveIncidentMutation({ id });
     toast("var(--teal)", "check-check", "FLAG RESOLVED", "Incident marked resolved");
   };
 
@@ -382,9 +375,8 @@ export default function CMIFFTracker() {
     const linkedRecipients = recipients.filter((p) => p.linked && p.telegramChatId);
     const unlinkedCount = recipients.length - linkedRecipients.length;
 
-    const log: BroadcastLog = {
-      _id: `bl_${Date.now()}`,
-      id: `bl_${Date.now()}`,
+    const log = {
+      id: `bl_${Date.now()}_${++uidRef.current}`,
       tm: fmt(simMin),
       day,
       scope: adminScope,
@@ -392,7 +384,7 @@ export default function CMIFFTracker() {
       prio: adminPrio,
       txt: adminText,
     };
-    setBroadcasts((prev) => [log, ...prev]);
+    void addBroadcastLog(log);
     setAdminText("");
     setShowAiDraft(false);
 
@@ -400,17 +392,12 @@ export default function CMIFFTracker() {
     let sent = 0;
     for (const p of linkedRecipients) {
       try {
-        const res = await fetch("/api/telegram/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chatId: p.telegramChatId,
-            text: `${adminPrio === "CRITICAL" ? "🚨" : adminPrio === "ALERT" ? "⚠️" : "📢"} *CMIFF OPS*
+        const data = await sendTelegramMessage({
+          chatId: p.telegramChatId!,
+          text: `${adminPrio === "CRITICAL" ? "🚨" : adminPrio === "ALERT" ? "⚠️" : "📢"} *CMIFF OPS*
 
 ${adminText}`,
-          }),
         });
-        const data = await res.json();
         if (data.ok) sent++;
       } catch (e) {
         console.error("Send failed:", e);
@@ -478,37 +465,40 @@ ${adminText}`,
 
   const handleUploadSave = () => {
     const newActs = uploadResult.map((a) => ({
-      ...a,
-      _id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      title: a.title,
+      venue: a.venue,
+      pillar: a.pillar,
+      status: a.status,
       day: uploadDay,
       start: parseInt(a.start.split(":")[0]) * 60 + parseInt(a.start.split(":")[1]),
       end: parseInt(a.end.split(":")[0]) * 60 + parseInt(a.end.split(":")[1]),
+      details: a.details || undefined,
+      gear: a.gear || undefined,
       quiet: /^(lunch|dinner|break|transition)/i.test(a.title),
-      checks: undefined,
       delay: 0,
       manual: null,
       crewLead: null,
       crewTechs: [],
       crewVols: [],
     }));
-    setActivities((prev) => [...prev, ...newActs].sort((a, b) => a.day - b.day || a.start - b.start));
+    void addActivities({ activities: newActs });
     setUploadStatus("idle");
     setUploadText("");
     setUploadResult([]);
     toast("var(--teal)", "play", "IMPORTED", `${newActs.length} activities added to Day ${uploadDay}`);
   };
 
-  const handleAckBot = (id: string) => {
-    setBotMessages((prev) => prev.map((m) => (m.id === id ? { ...m, acked: true } : m)));
+  const handleAckBot = (id: Id<"bot_messages">) => {
+    void ackBotMessageMutation({ id });
   };
 
   const testBotConnection = async () => {
     try {
-      const res = await fetch("/api/telegram/status");
-      const data = await res.json();
+      const data = await getTelegramBotStatus({});
       if (data.ok) {
-        setBotStatus({ connected: true, info: data.bot });
-        toast("var(--teal)", "check", "BOT CONNECTED", `@${data.bot.username} is ready`);
+        const bot = (data as any).bot;
+        setBotStatus({ connected: true, info: bot });
+        toast("var(--teal)", "check", "BOT CONNECTED", `@${bot.username} is ready`);
       } else {
         setBotStatus({ connected: false, error: data.error });
         toast("var(--red)", "alert-triangle", "BOT ERROR", data.error);
@@ -525,15 +515,10 @@ ${adminText}`,
       return;
     }
     try {
-      const res = await fetch("/api/telegram/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chatId: chatId,
-          text: `🧪 *Test message from CMIFF Tracker*\n\nYour Telegram integration is working! 🎉`,
-        }),
+      const data = await sendTelegramMessage({
+        chatId,
+        text: `🧪 *Test message from CMIFF Tracker*\n\nYour Telegram integration is working! 🎉`,
       });
-      const data = await res.json();
       if (data.ok) {
         toast("var(--teal)", "send", "MESSAGE SENT", `Test message sent to chat ${chatId}`);
       } else {
@@ -602,6 +587,9 @@ ${adminText}`,
           </div>
           <button className="flags-btn" onClick={() => setShowFlagsDrawer(true)}>
             <Flag size={14} />FLAGS <span className={`badge ${openFlags === 0 ? "zero" : ""}`}>{openFlags}</span>
+          </button>
+          <button className="ghost-btn" onClick={() => void signOut()} title="Sign out">
+            <LogOut size={13} />SIGN OUT
           </button>
         </div>
       </header>
@@ -1012,7 +1000,7 @@ ${adminText}`,
                           {b.ruleId && <div className="bfoot">⚡ AUTO · RULE {RULES.find((r) => r.id === b.ruleId)?.label}</div>}
                           {!b.acked && b.kind !== "admin" && (
                             <div className="bbtns">
-                              <button className="abtn" onClick={() => handleAckBot(b.id)}>
+                              <button className="abtn" onClick={() => handleAckBot(b._id)}>
                                 <Check size={10} />ACK
                               </button>
                             </div>
@@ -1343,7 +1331,7 @@ ${adminText}`,
                     </div>}
                     {i.status !== "resolved" && (
                       <div style={{ marginTop: 8 }}>
-                        <button className="abtn" onClick={() => resolveFlag(i.id)}>
+                        <button className="abtn" onClick={() => resolveFlag(i._id)}>
                           <CheckCheck size={10} />RESOLVE
                         </button>
                       </div>

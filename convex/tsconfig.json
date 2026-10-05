@@ -1,6 +1,15 @@
-import { defineConfig } from "convex/server";
-import { httpRouter } from "convex/server";
-
-const router = httpRouter();
-
-export default defineConfig(router);
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "strict": true,
+    "noEmit": true,
+    "lib": ["ESNext", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true,
+    "target": "ESNext",
+    "jsx": "react-jsx"
+  },
+  "include": ["./**/*"],
+  "exclude": ["../node_modules", "./_generated"]
+}
